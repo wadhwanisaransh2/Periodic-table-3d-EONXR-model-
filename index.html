@@ -1,0 +1,410 @@
+
+Put your HTML text here<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive 3D Periodic Table</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #05050c;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden; /* Hide scrollbars */
+        }
+        canvas {
+            display: block;
+        }
+        #tooltip {
+            position: absolute;
+            display: none;
+            padding: 15px;
+            background-color: rgba(20, 20, 30, 0.9);
+            border: 1px solid #00ffff;
+            border-radius: 8px;
+            pointer-events: none; /* So it doesn't interfere with mouse events on the canvas */
+            font-size: 14px;
+            line-height: 1.5;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+            backdrop-filter: blur(5px);
+        }
+        #tooltip h3 {
+            margin: 0 0 10px 0;
+            color: #00ffff;
+            font-size: 18px;
+        }
+        #tooltip p {
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="tooltip"></div>
+
+    <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.155.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.155.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- DATA: All 118 Elements ---
+        const elementData = [
+            // symbol, name, atomic_number, atomic_mass, category, x, y
+            ["H", "Hydrogen", 1, 1.008, "diatomic nonmetal", 1, 1],
+            ["He", "Helium", 2, 4.0026, "noble gas", 18, 1],
+            ["Li", "Lithium", 3, 6.94, "alkali metal", 1, 2],
+            ["Be", "Beryllium", 4, 9.0122, "alkaline earth metal", 2, 2],
+            ["B", "Boron", 5, 10.81, "metalloid", 13, 2],
+            ["C", "Carbon", 6, 12.011, "polyatomic nonmetal", 14, 2],
+            ["N", "Nitrogen", 7, 14.007, "diatomic nonmetal", 15, 2],
+            ["O", "Oxygen", 8, 15.999, "diatomic nonmetal", 16, 2],
+            ["F", "Fluorine", 9, 18.998, "diatomic nonmetal", 17, 2],
+            ["Ne", "Neon", 10, 20.180, "noble gas", 18, 2],
+            ["Na", "Sodium", 11, 22.990, "alkali metal", 1, 3],
+            ["Mg", "Magnesium", 12, 24.305, "alkaline earth metal", 2, 3],
+            ["Al", "Aluminium", 13, 26.982, "post-transition metal", 13, 3],
+            ["Si", "Silicon", 14, 28.085, "metalloid", 14, 3],
+            ["P", "Phosphorus", 15, 30.974, "polyatomic nonmetal", 15, 3],
+            ["S", "Sulfur", 16, 32.06, "polyatomic nonmetal", 16, 3],
+            ["Cl", "Chlorine", 17, 35.45, "diatomic nonmetal", 17, 3],
+            ["Ar", "Argon", 18, 39.948, "noble gas", 18, 3],
+            ["K", "Potassium", 19, 39.098, "alkali metal", 1, 4],
+            ["Ca", "Calcium", 20, 40.078, "alkaline earth metal", 2, 4],
+            ["Sc", "Scandium", 21, 44.956, "transition metal", 3, 4],
+            ["Ti", "Titanium", 22, 47.867, "transition metal", 4, 4],
+            ["V", "Vanadium", 23, 50.942, "transition metal", 5, 4],
+            ["Cr", "Chromium", 24, 51.996, "transition metal", 6, 4],
+            ["Mn", "Manganese", 25, 54.938, "transition metal", 7, 4],
+            ["Fe", "Iron", 26, 55.845, "transition metal", 8, 4],
+            ["Co", "Cobalt", 27, 58.933, "transition metal", 9, 4],
+            ["Ni", "Nickel", 28, 58.693, "transition metal", 10, 4],
+            ["Cu", "Copper", 29, 63.546, "transition metal", 11, 4],
+            ["Zn", "Zinc", 30, 65.38, "transition metal", 12, 4],
+            ["Ga", "Gallium", 31, 69.723, "post-transition metal", 13, 4],
+            ["Ge", "Germanium", 32, 72.630, "metalloid", 14, 4],
+            ["As", "Arsenic", 33, 74.922, "metalloid", 15, 4],
+            ["Se", "Selenium", 34, 78.971, "polyatomic nonmetal", 16, 4],
+            ["Br", "Bromine", 35, 79.904, "diatomic nonmetal", 17, 4],
+            ["Kr", "Krypton", 36, 83.798, "noble gas", 18, 4],
+            ["Rb", "Rubidium", 37, 85.468, "alkali metal", 1, 5],
+            ["Sr", "Strontium", 38, 87.62, "alkaline earth metal", 2, 5],
+            ["Y", "Yttrium", 39, 88.906, "transition metal", 3, 5],
+            ["Zr", "Zirconium", 40, 91.224, "transition metal", 4, 5],
+            ["Nb", "Niobium", 41, 92.906, "transition metal", 5, 5],
+            ["Mo", "Molybdenum", 42, 95.96, "transition metal", 6, 5],
+            ["Tc", "Technetium", 43, 98, "transition metal", 7, 5],
+            ["Ru", "Ruthenium", 44, 101.07, "transition metal", 8, 5],
+            ["Rh", "Rhodium", 45, 102.91, "transition metal", 9, 5],
+            ["Pd", "Palladium", 46, 106.42, "transition metal", 10, 5],
+            ["Ag", "Silver", 47, 107.87, "transition metal", 11, 5],
+            ["Cd", "Cadmium", 48, 112.41, "transition metal", 12, 5],
+            ["In", "Indium", 49, 114.82, "post-transition metal", 13, 5],
+            ["Sn", "Tin", 50, 118.71, "post-transition metal", 14, 5],
+            ["Sb", "Antimony", 51, 121.76, "metalloid", 15, 5],
+            ["Te", "Tellurium", 52, 127.60, "metalloid", 16, 5],
+            ["I", "Iodine", 53, 126.90, "diatomic nonmetal", 17, 5],
+            ["Xe", "Xenon", 54, 131.29, "noble gas", 18, 5],
+            ["Cs", "Caesium", 55, 132.91, "alkali metal", 1, 6],
+            ["Ba", "Barium", 56, 137.33, "alkaline earth metal", 2, 6],
+            ["La", "Lanthanum", 57, 138.91, "lanthanide", 4, 9],
+            ["Ce", "Cerium", 58, 140.12, "lanthanide", 5, 9],
+            ["Pr", "Praseodymium", 59, 140.91, "lanthanide", 6, 9],
+            ["Nd", "Neodymium", 60, 144.24, "lanthanide", 7, 9],
+            ["Pm", "Promethium", 61, 145, "lanthanide", 8, 9],
+            ["Sm", "Samarium", 62, 150.36, "lanthanide", 9, 9],
+            ["Eu", "Europium", 63, 151.96, "lanthanide", 10, 9],
+            ["Gd", "Gadolinium", 64, 157.25, "lanthanide", 11, 9],
+            ["Tb", "Terbium", 65, 158.93, "lanthanide", 12, 9],
+            ["Dy", "Dysprosium", 66, 162.50, "lanthanide", 13, 9],
+            ["Ho", "Holmium", 67, 164.93, "lanthanide", 14, 9],
+            ["Er", "Erbium", 68, 167.26, "lanthanide", 15, 9],
+            ["Tm", "Thulium", 69, 168.93, "lanthanide", 16, 9],
+            ["Yb", "Ytterbium", 70, 173.05, "lanthanide", 17, 9],
+            ["Lu", "Lutetium", 71, 174.97, "lanthanide", 18, 9],
+            ["Hf", "Hafnium", 72, 178.49, "transition metal", 4, 6],
+            ["Ta", "Tantalum", 73, 180.95, "transition metal", 5, 6],
+            ["W", "Tungsten", 74, 183.84, "transition metal", 6, 6],
+            ["Re", "Rhenium", 75, 186.21, "transition metal", 7, 6],
+            ["Os", "Osmium", 76, 190.23, "transition metal", 8, 6],
+            ["Ir", "Iridium", 77, 192.22, "transition metal", 9, 6],
+            ["Pt", "Platinum", 78, 195.08, "transition metal", 10, 6],
+            ["Au", "Gold", 79, 196.97, "transition metal", 11, 6],
+            ["Hg", "Mercury", 80, 200.59, "transition metal", 12, 6],
+            ["Tl", "Thallium", 81, 204.38, "post-transition metal", 13, 6],
+            ["Pb", "Lead", 82, 207.2, "post-transition metal", 14, 6],
+            ["Bi", "Bismuth", 83, 208.98, "post-transition metal", 15, 6],
+            ["Po", "Polonium", 84, 209, "post-transition metal", 16, 6],
+            ["At", "Astatine", 85, 210, "metalloid", 17, 6],
+            ["Rn", "Radon", 86, 222, "noble gas", 18, 6],
+            ["Fr", "Francium", 87, 223, "alkali metal", 1, 7],
+            ["Ra", "Radium", 88, 226, "alkaline earth metal", 2, 7],
+            ["Ac", "Actinium", 89, 227, "actinide", 4, 10],
+            ["Th", "Thorium", 90, 232.04, "actinide", 5, 10],
+            ["Pa", "Protactinium", 91, 231.04, "actinide", 6, 10],
+            ["U", "Uranium", 92, 238.03, "actinide", 7, 10],
+            ["Np", "Neptunium", 93, 237, "actinide", 8, 10],
+            ["Pu", "Plutonium", 94, 244, "actinide", 9, 10],
+            ["Am", "Americium", 95, 243, "actinide", 10, 10],
+            ["Cm", "Curium", 96, 247, "actinide", 11, 10],
+            ["Bk", "Berkelium", 97, 247, "actinide", 12, 10],
+            ["Cf", "Californium", 98, 251, "actinide", 13, 10],
+            ["Es", "Einsteinium", 99, 252, "actinide", 14, 10],
+            ["Fm", "Fermium", 100, 257, "actinide", 15, 10],
+            ["Md", "Mendelevium", 101, 258, "actinide", 16, 10],
+            ["No", "Nobelium", 102, 259, "actinide", 17, 10],
+            ["Lr", "Lawrencium", 103, 266, "actinide", 18, 10],
+            ["Rf", "Rutherfordium", 104, 267, "transition metal", 4, 7],
+            ["Db", "Dubnium", 105, 268, "transition metal", 5, 7],
+            ["Sg", "Seaborgium", 106, 269, "transition metal", 6, 7],
+            ["Bh", "Bohrium", 107, 270, "transition metal", 7, 7],
+            ["Hs", "Hassium", 108, 277, "transition metal", 8, 7],
+            ["Mt", "Meitnerium", 109, 278, "unknown", 9, 7],
+            ["Ds", "Darmstadtium", 110, 281, "unknown", 10, 7],
+            ["Rg", "Roentgenium", 111, 282, "unknown", 11, 7],
+            ["Cn", "Copernicium", 112, 285, "transition metal", 12, 7],
+            ["Nh", "Nihonium", 113, 286, "unknown", 13, 7],
+            ["Fl", "Flerovium", 114, 289, "unknown", 14, 7],
+            ["Mc", "Moscovium", 115, 290, "unknown", 15, 7],
+            ["Lv", "Livermorium", 116, 293, "unknown", 16, 7],
+            ["Ts", "Tennessine", 117, 294, "unknown", 17, 7],
+            ["Og", "Oganesson", 118, 294, "unknown", 18, 7]
+        ];
+
+        const categoryColors = {
+            "diatomic nonmetal": 0xf4a261,
+            "noble gas": 0x219ebc,
+            "alkali metal": 0xe76f51,
+            "alkaline earth metal": 0xfca311,
+            "metalloid": 0x2a9d8f,
+            "polyatomic nonmetal": 0xe9c46a,
+            "post-transition metal": 0xa8dadc,
+            "transition metal": 0x457b9d,
+            "lanthanide": 0x8d99ae,
+            "actinide": 0xef233c,
+            "unknown": 0x2d3a4b
+        };
+
+        // --- Core Three.js Components ---
+        let scene, camera, renderer, controls;
+        let periodicTableGroup;
+        const objects = [];
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let intersected;
+
+        const tooltip = document.getElementById('tooltip');
+
+        function init() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x05050c);
+            scene.fog = new THREE.Fog(0x05050c, 30, 60);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, 30);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.body.appendChild(renderer.domElement);
+
+            // Controls
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.minDistance = 10;
+            controls.maxDistance = 50;
+            
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambientLight);
+
+            const pointLight = new THREE.PointLight(0xffffff, 1.5, 200);
+            pointLight.position.set(10, 10, 25);
+            scene.add(pointLight);
+
+            const directionalLight = new THREE.DirectionalLight(0x00ffff, 0.3);
+            directionalLight.position.set(-10, -5, -20);
+            scene.add(directionalLight);
+            
+            // --- Create Periodic Table ---
+            periodicTableGroup = new THREE.Group();
+            const elementSize = 2.4;
+            const elementSpacing = 0.2;
+            const tileSize = elementSize + elementSpacing;
+            
+            const geometry = new THREE.BoxGeometry(elementSize, elementSize, elementSize * 0.2);
+
+            elementData.forEach(data => {
+                const element = {
+                    symbol: data[0],
+                    name: data[1],
+                    atomic_number: data[2],
+                    atomic_mass: data[3],
+                    category: data[4],
+                    x: data[5],
+                    y: data[6]
+                };
+
+                const color = categoryColors[element.category] || 0xffffff;
+                const material = new THREE.MeshStandardMaterial({
+                    color: color,
+                    metalness: 0.3,
+                    roughness: 0.6,
+                });
+                
+                const object = new THREE.Mesh(geometry, material);
+
+                // Create text textures
+                const textCanvas = createTextCanvas(element);
+                const textTexture = new THREE.CanvasTexture(textCanvas);
+                textTexture.needsUpdate = true;
+
+                const textMaterial = new THREE.MeshStandardMaterial({ 
+                    map: textTexture, 
+                    metalness: 0.3,
+                    roughness: 0.6,
+                });
+                
+                const materials = [
+                    material, // right
+                    material, // left
+                    material, // top
+                    material, // bottom
+                    textMaterial, // front
+                    material  // back
+                ];
+                
+                const tile = new THREE.Mesh(geometry, materials);
+                
+                tile.position.x = (element.x - 9.5) * tileSize;
+                tile.position.y = -(element.y - 5.5) * tileSize;
+
+                tile.userData = element; // Store full data for tooltip
+                periodicTableGroup.add(tile);
+                objects.push(tile); // For raycasting
+            });
+
+            scene.add(periodicTableGroup);
+            
+            // --- Event Listeners ---
+            window.addEventListener('resize', onWindowResize, false);
+            document.addEventListener('mousemove', onMouseMove, false);
+
+            animate();
+        }
+
+        // --- Helper function to create text on canvas ---
+        function createTextCanvas(element) {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            const size = 256;
+            canvas.width = size;
+            canvas.height = size;
+
+            // Background color matches the element
+            context.fillStyle = new THREE.Color(categoryColors[element.category]).getStyle();
+            context.fillRect(0, 0, size, size);
+
+            // Atomic Number
+            context.font = 'bold 48px Arial';
+            context.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            context.textAlign = 'left';
+            context.fillText(element.atomic_number, 20, 50);
+            
+            // Symbol
+            context.font = 'bold 120px Arial';
+            context.fillStyle = 'white';
+            context.textAlign = 'center';
+            context.fillText(element.symbol, size / 2, size / 2 + 40);
+
+            // Atomic Mass
+            context.font = '32px Arial';
+            context.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            context.textAlign = 'center';
+            context.fillText(element.atomic_mass, size / 2, size - 30);
+            
+            return canvas;
+        }
+
+        // --- Event Handlers ---
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            
+            // Move tooltip with mouse
+            tooltip.style.left = (event.clientX + 15) + 'px';
+            tooltip.style.top = (event.clientY + 15) + 'px';
+        }
+
+        // --- Animation Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+
+            // Automatic rotation when not being controlled
+            if (!controls.autoRotate) {
+                 periodicTableGroup.rotation.y += 0.001;
+            }
+           
+            render();
+            updateTooltip();
+        }
+        
+        function updateTooltip() {
+             raycaster.setFromCamera(mouse, camera);
+             const intersects = raycaster.intersectObjects(objects);
+
+             if (intersects.length > 0) {
+                if (intersected !== intersects[0].object) {
+                    if (intersected) {
+                        intersected.scale.set(1, 1, 1); // Reset previous
+                    }
+                    intersected = intersects[0].object;
+                    intersected.scale.set(1.1, 1.1, 1.1); // Scale up current
+
+                    const element = intersected.userData;
+                    tooltip.style.display = 'block';
+                    tooltip.innerHTML = `
+                        <h3>${element.name} (${element.symbol})</h3>
+                        <p><strong>Atomic Number:</strong> ${element.atomic_number}</p>
+                        <p><strong>Atomic Mass:</strong> ${element.atomic_mass}</p>
+                        <p><strong>Category:</strong> ${element.category}</p>
+                    `;
+                }
+             } else {
+                 if (intersected) {
+                     intersected.scale.set(1, 1, 1); // Reset
+                 }
+                 intersected = null;
+                 tooltip.style.display = 'none';
+             }
+        }
+        
+        function render() {
+            renderer.render(scene, camera);
+        }
+
+        // --- Start the application ---
+        init();
+    </script>
+
+</body>
+</html>
